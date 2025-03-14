@@ -1,0 +1,13 @@
+# Node.js dependencies
+node_modules/
+
+# Environment variables
+.env
+
+
+# Ignore frontend dependencies
+frontend/node_modules
+
+# Ignore backend dependencies
+backend/node_modules/
+.
