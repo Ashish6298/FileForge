@@ -5,10 +5,11 @@ const path = require("path");
 const fs = require("fs");
 const pdfParse = require("pdf-parse");
 const { Document, Packer, Paragraph, TextRun } = require("docx");
-const cors = require("cors"); // Add CORS for frontend communication
+const cors = require("cors");
+const docxConverter = require("docx-pdf");
 
 // Initialize Express app
-const app = express(); // Define 'app' here
+const app = express();
 const PORT = 5000;
 
 // Ensure the 'uploads' directory exists
@@ -27,14 +28,30 @@ const storage = multer.diskStorage({
   },
 });
 
-// Multer upload middleware
-const upload = multer({
+// Multer upload middleware for PDF
+const uploadPdf = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["application/pdf"];
     if (!allowedTypes.includes(file.mimetype)) {
       return cb(new Error("Only PDF files are allowed"));
+    }
+    cb(null, true);
+  },
+});
+
+// Multer upload middleware for DOCX
+const uploadDocx = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+    ];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only DOCX files are allowed"));
     }
     cb(null, true);
   },
@@ -90,8 +107,41 @@ const convertPdfToDocx = async (pdfPath) => {
   }
 };
 
-// File upload and conversion route
-app.post("/convert", upload.single("pdfFile"), async (req, res) => {
+// Function to convert DOCX to PDF
+const convertDocxToPdf = async (docxPath) => {
+  let outputPath = path.join(uploadDir, `${path.parse(docxPath).name}.pdf`); // Define outside try block
+  try {
+    await new Promise((resolve, reject) => {
+      docxConverter(docxPath, outputPath, (err) => {
+        if (err) {
+          console.error("❌ Error converting DOCX to PDF:", err);
+          reject(err);
+        } else {
+          console.log("✅ DOCX converted to PDF successfully");
+          resolve();
+        }
+      });
+    });
+
+    const pdfBuffer = fs.readFileSync(outputPath);
+    console.log("✅ PDF buffer created, size:", pdfBuffer.length);
+
+    return pdfBuffer;
+  } catch (error) {
+    console.error("❌ Error in convertDocxToPdf:", error.message, error.stack);
+    throw error;
+  } finally {
+    fs.unlinkSync(docxPath); // Delete uploaded DOCX
+    console.log("✅ Uploaded DOCX file deleted");
+    if (fs.existsSync(outputPath)) {
+      fs.unlinkSync(outputPath); // Delete temporary PDF only if it exists
+      console.log("✅ Temporary PDF file deleted");
+    }
+  }
+};
+
+// Route for PDF to DOCX conversion
+app.post("/convert/pdf-to-docx", uploadPdf.single("pdfFile"), async (req, res) => {
   if (!req.file) {
     return res.status(400).send("No file uploaded");
   }
@@ -113,8 +163,30 @@ app.post("/convert", upload.single("pdfFile"), async (req, res) => {
 
     res.send(docxBuffer);
   } catch (error) {
-    console.error("❌ Error in /convert route:", error.message);
+    console.error("❌ Error in /convert/pdf-to-docx route:", error.message);
     res.status(500).json({ error: "Failed to convert PDF", details: error.message });
+  }
+});
+
+// Route for DOCX to PDF conversion
+app.post("/convert/docx-to-pdf", uploadDocx.single("docxFile"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).send("No file uploaded");
+  }
+
+  console.log("Uploaded file:", req.file);
+
+  try {
+    const pdfBuffer = await convertDocxToPdf(req.file.path);
+    const originalName = path.parse(req.file.originalname).name;
+
+    res.setHeader("Content-Disposition", `attachment; filename="${originalName}.pdf"`);
+    res.setHeader("Content-Type", "application/pdf");
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("❌ Error in /convert/docx-to-pdf route:", error.message);
+    res.status(500).json({ error: "Failed to convert DOCX", details: error.message });
   }
 });
 

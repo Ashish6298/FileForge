@@ -14,15 +14,20 @@
     "child_process": "^1.0.2",
     "cors": "^2.8.5",
     "docx": "^9.2.0",
+    "docx-pdf": "^0.0.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "fs-extra": "^11.3.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
     "nodemon": "^3.1.9",
+    "office-to-pdf": "^4.0.0",
     "path": "^0.12.7",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
+    "pptx2pdf": "^1.0.10",
+    "sharp": "^0.33.5",
     "tesseract.js": "^6.0.0"
   }
 }
