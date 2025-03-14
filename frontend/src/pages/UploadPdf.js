@@ -60,9 +60,11 @@ const ModalBox = styled(Box)(({ theme }) => ({
 const UploadFile = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [docxFile, setDocxFile] = useState(null);
+  const [pptxFile, setPptxFile] = useState(null); // New state for PPTX
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
+  const [openPptxModal, setOpenPptxModal] = useState(false); // New state for PPTX modal
 
   // Handle file change for PDF
   const handlePdfFileChange = (event) => {
@@ -76,6 +78,12 @@ const UploadFile = () => {
     if (selectedFile) setDocxFile(selectedFile);
   };
 
+  // Handle file change for PPTX
+  const handlePptxFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setPptxFile(selectedFile);
+  };
+
   // Open file input for PDF
   const handlePdfUploadClick = () => {
     document.getElementById("pdfFileInput").click();
@@ -84,6 +92,11 @@ const UploadFile = () => {
   // Open file input for DOCX
   const handleDocxUploadClick = () => {
     document.getElementById("docxFileInput").click();
+  };
+
+  // Open file input for PPTX
+  const handlePptxUploadClick = () => {
+    document.getElementById("pptxFileInput").click();
   };
 
   // Convert PDF to DOCX
@@ -166,6 +179,45 @@ const UploadFile = () => {
     }
   };
 
+  // Convert PPTX to PDF
+  const handleConvertPptxToPdf = async () => {
+    if (!pptxFile) {
+      alert("Please select a PPTX file first");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("pptxFile", pptxFile);
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/convert/pptx-to-pdf",
+        formData,
+        { responseType: "blob" }
+      );
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${pptxFile.name.replace(".pptx", "")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setOpenPptxModal(false);
+      setPptxFile(null);
+    } catch (error) {
+      console.error("Error converting PPTX to PDF:", error);
+      alert("Failed to convert PPTX: " + (error.response?.data?.details || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -197,8 +249,9 @@ const UploadFile = () => {
           flexDirection: { xs: "column", sm: "row" },
           gap: 3,
           width: "100%",
-          maxWidth: 700,
+          maxWidth: 1050, // Increased to accommodate three cards
           justifyContent: "center",
+          flexWrap: "wrap",
         }}
       >
         {/* PDF to DOCX Card */}
@@ -249,6 +302,33 @@ const UploadFile = () => {
                 px: 3,
               }}
               onClick={() => setOpenDocxModal(true)}
+            >
+              Convert Now
+            </Button>
+          </CardActions>
+        </CoolCard>
+
+        {/* PPTX to PDF Card */}
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              PPTX to PDF
+            </Typography>
+            <Typography variant="body2">
+              Turn your PPTX presentations into polished PDFs quickly.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#7b5ee9", // Slightly different shade for variety
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenPptxModal(true)}
             >
               Convert Now
             </Button>
@@ -373,6 +453,68 @@ const UploadFile = () => {
               borderRadius: "20px",
               background: "linear-gradient(90deg, #a777e3 0%, #6e8efb 100%)",
               "&:hover": { background: "linear-gradient(90deg, #9366d2 0%, #5a78e0 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to PDF"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
+      {/* PPTX to PDF Modal */}
+      <Modal open={openPptxModal} onClose={() => setOpenPptxModal(false)}>
+        <ModalBox>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ color: "#3f51b5", fontWeight: "bold" }}
+          >
+            Upload PPTX File
+          </Typography>
+
+          <input
+            id="pptxFileInput"
+            type="file"
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            onChange={handlePptxFileChange}
+            style={{ display: "none" }}
+          />
+
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<FileUploadIcon />}
+            onClick={handlePptxUploadClick}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#7b5ee9",
+              color: "#7b5ee9",
+              "&:hover": { borderColor: "#694dd8" },
+            }}
+          >
+            Upload PPTX
+          </Button>
+
+          {pptxFile && (
+            <Typography
+              variant="body1"
+              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
+            >
+              📄 {pptxFile.name}
+            </Typography>
+          )}
+
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleConvertPptxToPdf}
+            disabled={loading || !pptxFile}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #7b5ee9 0%, #6e8efb 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #694dd8 0%, #5a78e0 100%)" },
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to PDF"}

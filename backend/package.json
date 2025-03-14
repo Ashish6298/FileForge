@@ -26,8 +26,14 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
+    "pdfkit": "^0.16.0",
+    "ppt-png": "^2.1.4",
+    "pptx-parser": "^1.1.7-beta.9",
     "pptx2pdf": "^1.0.10",
+    "pptxgenjs": "^3.12.0",
     "sharp": "^0.33.5",
-    "tesseract.js": "^6.0.0"
+    "tesseract.js": "^6.0.0",
+    "unzipper": "^0.12.3",
+    "xml2js": "^0.6.2"
   }
 }

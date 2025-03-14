@@ -11,3 +11,4 @@ frontend/node_modules
 # Ignore backend dependencies
 backend/node_modules/
 .
+.qodo
