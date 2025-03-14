@@ -60,11 +60,13 @@ const ModalBox = styled(Box)(({ theme }) => ({
 const UploadFile = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [docxFile, setDocxFile] = useState(null);
-  const [pptxFile, setPptxFile] = useState(null); // New state for PPTX
+  const [pptxFile, setPptxFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null); // New state for video
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
-  const [openPptxModal, setOpenPptxModal] = useState(false); // New state for PPTX modal
+  const [openPptxModal, setOpenPptxModal] = useState(false);
+  const [openVideoModal, setOpenVideoModal] = useState(false); // New state for video modal
 
   // Handle file change for PDF
   const handlePdfFileChange = (event) => {
@@ -84,6 +86,12 @@ const UploadFile = () => {
     if (selectedFile) setPptxFile(selectedFile);
   };
 
+  // Handle file change for Video
+  const handleVideoFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setVideoFile(selectedFile);
+  };
+
   // Open file input for PDF
   const handlePdfUploadClick = () => {
     document.getElementById("pdfFileInput").click();
@@ -97,6 +105,11 @@ const UploadFile = () => {
   // Open file input for PPTX
   const handlePptxUploadClick = () => {
     document.getElementById("pptxFileInput").click();
+  };
+
+  // Open file input for Video
+  const handleVideoUploadClick = () => {
+    document.getElementById("videoFileInput").click();
   };
 
   // Convert PDF to DOCX
@@ -218,6 +231,45 @@ const UploadFile = () => {
     }
   };
 
+  // Convert Video to Audio
+  const handleConvertVideoToAudio = async () => {
+    if (!videoFile) {
+      alert("Please select a video file first");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("videoFile", videoFile);
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/convert/video-to-audio",
+        formData,
+        { responseType: "blob" }
+      );
+
+      const blob = new Blob([response.data], { type: "audio/mpeg" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${videoFile.name.replace(/\.(mp4|avi|mpeg|mov)$/i, "")}.mp3`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setOpenVideoModal(false);
+      setVideoFile(null);
+    } catch (error) {
+      console.error("Error converting video to audio:", error);
+      alert("Failed to convert video: " + (error.response?.data?.details || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -249,7 +301,7 @@ const UploadFile = () => {
           flexDirection: { xs: "column", sm: "row" },
           gap: 3,
           width: "100%",
-          maxWidth: 1050, // Increased to accommodate three cards
+          maxWidth: 1400, // Increased to accommodate four cards
           justifyContent: "center",
           flexWrap: "wrap",
         }}
@@ -323,12 +375,39 @@ const UploadFile = () => {
               variant="contained"
               sx={{
                 backgroundColor: "#fff",
-                color: "#7b5ee9", // Slightly different shade for variety
+                color: "#7b5ee9",
                 "&:hover": { backgroundColor: "#f0f0f0" },
                 borderRadius: "20px",
                 px: 3,
               }}
               onClick={() => setOpenPptxModal(true)}
+            >
+              Convert Now
+            </Button>
+          </CardActions>
+        </CoolCard>
+
+        {/* Video to Audio Card */}
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              Video to Audio
+            </Typography>
+            <Typography variant="body2">
+              Extract audio from your videos as MP3 files effortlessly.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#5e89e9", // New shade for distinction
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenVideoModal(true)}
             >
               Convert Now
             </Button>
@@ -518,6 +597,68 @@ const UploadFile = () => {
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to PDF"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
+      {/* Video to Audio Modal */}
+      <Modal open={openVideoModal} onClose={() => setOpenVideoModal(false)}>
+        <ModalBox>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ color: "#3f51b5", fontWeight: "bold" }}
+          >
+            Upload Video File
+          </Typography>
+
+          <input
+            id="videoFileInput"
+            type="file"
+            accept="video/mp4,video/avi,video/mpeg,video/quicktime"
+            onChange={handleVideoFileChange}
+            style={{ display: "none" }}
+          />
+
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<FileUploadIcon />}
+            onClick={handleVideoUploadClick}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#5e89e9",
+              color: "#5e89e9",
+              "&:hover": { borderColor: "#4d78d8" },
+            }}
+          >
+            Upload Video
+          </Button>
+
+          {videoFile && (
+            <Typography
+              variant="body1"
+              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
+            >
+              🎥 {videoFile.name}
+            </Typography>
+          )}
+
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleConvertVideoToAudio}
+            disabled={loading || !videoFile}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #5e89e9 0%, #a777e3 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #4d78d8 0%, #9366d2 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to MP3"}
           </Button>
         </ModalBox>
       </Modal>
