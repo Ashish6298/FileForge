@@ -12,20 +12,26 @@ const unzipper = require("unzipper");
 const xml2js = require("xml2js");
 const PDFDocument = require("pdfkit");
 const ffmpeg = require("fluent-ffmpeg");
+const axios = require("axios");
+const Tesseract = require("tesseract.js");
+const dotenv = require("dotenv");
+
+// Load environment variables
+dotenv.config();
 
 // Set FFmpeg path explicitly
 ffmpeg.setFfmpegPath("D:\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\bin\\ffmpeg.exe");
 
 // Initialize Express app
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Ensure the 'uploads' directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Multer storage configuration
-const storage = multer.diskStorage({
+// Multer storage configuration for disk (used for conversions)
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
@@ -36,9 +42,12 @@ const storage = multer.diskStorage({
   },
 });
 
-// Multer upload middleware for PDF
+// Multer storage configuration for memory (used for summarization)
+const memoryStorage = multer.memoryStorage();
+
+// Multer upload middleware for PDF (disk)
 const uploadPdf = multer({
-  storage,
+  storage: diskStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["application/pdf"];
@@ -49,9 +58,9 @@ const uploadPdf = multer({
   },
 });
 
-// Multer upload middleware for DOCX
+// Multer upload middleware for DOCX (disk)
 const uploadDocx = multer({
-  storage,
+  storage: diskStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -65,9 +74,9 @@ const uploadDocx = multer({
   },
 });
 
-// Multer upload middleware for PPT/PPTX
+// Multer upload middleware for PPT/PPTX (disk)
 const uploadPptx = multer({
-  storage,
+  storage: diskStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -81,9 +90,9 @@ const uploadPptx = multer({
   },
 });
 
-// Multer upload middleware for Video
+// Multer upload middleware for Video (disk)
 const uploadVideo = multer({
-  storage,
+  storage: diskStorage,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["video/mp4", "video/avi", "video/mpeg", "video/quicktime"];
@@ -94,8 +103,22 @@ const uploadVideo = multer({
   },
 });
 
-// Enable CORS
+// Multer upload middleware for Summarization (memory)
+const uploadSummary = multer({
+  storage: memoryStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only PDF or image files (PNG, JPEG, JPG) are allowed"));
+    }
+    cb(null, true);
+  },
+});
+
+// Enable CORS and JSON parsing
 app.use(cors());
+app.use(express.json());
 
 // Function to convert PDF to DOCX
 const convertPdfToDocx = async (pdfPath) => {
@@ -264,7 +287,6 @@ const convertVideoToAudio = async (videoPath) => {
           const audioBuffer = fs.readFileSync(outputPath);
           console.log("✅ Audio buffer created, size:", audioBuffer.length);
 
-          // Cleanup after successful conversion
           fs.unlinkSync(videoPath);
           console.log("✅ Uploaded video file deleted");
           fs.unlinkSync(outputPath);
@@ -275,7 +297,6 @@ const convertVideoToAudio = async (videoPath) => {
         .on("error", (err) => {
           console.error("❌ Error converting video to audio:", err.message);
           reject(err);
-          // Cleanup on error (if files still exist)
           if (fs.existsSync(videoPath)) {
             fs.unlinkSync(videoPath);
             console.log("✅ Uploaded video file deleted (on error)");
@@ -289,7 +310,6 @@ const convertVideoToAudio = async (videoPath) => {
     } catch (error) {
       console.error("❌ Error in convertVideoToAudio:", error.message, error.stack);
       reject(error);
-      // Cleanup on early error
       if (fs.existsSync(videoPath)) {
         fs.unlinkSync(videoPath);
         console.log("✅ Uploaded video file deleted (on early error)");
@@ -301,6 +321,64 @@ const convertVideoToAudio = async (videoPath) => {
     }
   });
 };
+
+// Function to summarize paragraphs using Gemini API
+async function summarizeParagraphs(paragraphs) {
+  const summaries = [];
+
+  // Gemini API might have a token limit; chunk if necessary (adjust based on API limits)
+  const MAX_TEXT_LENGTH = 10000; // Example limit; adjust based on Gemini API documentation
+
+  for (const para of paragraphs) {
+    try {
+      let textToSummarize = para;
+      if (textToSummarize.length > MAX_TEXT_LENGTH) {
+        // Chunk long paragraphs
+        const chunks = [];
+        for (let i = 0; i < textToSummarize.length; i += MAX_TEXT_LENGTH) {
+          chunks.push(textToSummarize.slice(i, i + MAX_TEXT_LENGTH));
+        }
+
+        let combinedSummary = "";
+        for (const chunk of chunks) {
+          const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+            {
+              contents: [{ parts: [{ text: `Summarize this text:\n\n${chunk}` }] }],
+            },
+            {
+              headers: { "Content-Type": "application/json" },
+              params: { key: process.env.GEMINI_API_KEY },
+            }
+          );
+
+          const summary = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No summary available";
+          combinedSummary += summary + " ";
+        }
+        summaries.push(combinedSummary.trim());
+      } else {
+        const response = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+          {
+            contents: [{ parts: [{ text: `Summarize this paragraph:\n\n${textToSummarize}` }] }],
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+            params: { key: process.env.GEMINI_API_KEY },
+          }
+        );
+
+        const summary = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No summary available";
+        summaries.push(summary);
+      }
+    } catch (error) {
+      console.error("❌ Gemini API Error:", error.response?.data || error.message);
+      summaries.push("Error summarizing this paragraph");
+    }
+  }
+
+  return summaries;
+}
 
 // Route for PDF to DOCX conversion
 app.post("/convert/pdf-to-docx", uploadPdf.single("pdfFile"), async (req, res) => {
@@ -314,14 +392,8 @@ app.post("/convert/pdf-to-docx", uploadPdf.single("pdfFile"), async (req, res) =
     const docxBuffer = await convertPdfToDocx(req.file.path);
     const originalName = path.parse(req.file.originalname).name;
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${originalName}.docx"`
-    );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="${originalName}.docx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
     res.send(docxBuffer);
   } catch (error) {
@@ -393,6 +465,51 @@ app.post("/convert/video-to-audio", uploadVideo.single("videoFile"), async (req,
   } catch (error) {
     console.error("❌ Error in /convert/video-to-audio route:", error.message);
     res.status(500).json({ error: "Failed to convert video to audio", details: error.message });
+  }
+});
+
+// Route for Summarization (PDF or Image)
+app.post("/summarize", uploadSummary.single("file"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  console.log(`📂 File received: ${req.file.originalname}`);
+
+  let extractedText = "";
+
+  try {
+    if (req.file.mimetype === "application/pdf") {
+      const pdfData = await pdfParse(req.file.buffer);
+      extractedText = pdfData.text;
+      console.log(`📄 Extracted text from PDF (${pdfData.numpages} pages), length: ${extractedText.length}`);
+    } else if (req.file.mimetype.startsWith("image/")) {
+      const { data: { text } } = await Tesseract.recognize(req.file.buffer, "eng");
+      extractedText = text;
+      console.log("📄 Extracted text from image, length:", extractedText.length);
+    } else {
+      return res.status(400).json({ error: "Unsupported file type. Upload PDF or Image." });
+    }
+
+    // Improved paragraph splitting for multi-page PDFs
+    const paragraphs = extractedText
+      .split(/\n\s*\n+/) // Split by multiple newlines (common between paragraphs)
+      .map((p) => p.replace(/\n/g, " ").trim()) // Replace internal newlines with spaces (page breaks)
+      .filter((p) => p.length > 50); // Filter out very short fragments (e.g., headers, footers)
+
+    if (paragraphs.length === 0) {
+      return res.status(400).json({ error: "No meaningful paragraphs found in the document" });
+    }
+
+    console.log(`📑 Detected ${paragraphs.length} paragraphs`);
+
+    // Summarize the paragraphs
+    const summarizedParagraphs = await summarizeParagraphs(paragraphs);
+
+    res.json({ original: paragraphs, summary: summarizedParagraphs });
+  } catch (error) {
+    console.error("❌ Error processing file:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to summarize document", details: error.message });
   }
 });
 

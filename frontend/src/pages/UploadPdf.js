@@ -8,11 +8,15 @@ import {
   CardContent,
   CardActions,
   Modal,
+  IconButton,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import axios from "axios";
 import { styled } from "@mui/material/styles";
+import { ToastContainer, toast } from "react-toastify"; // Import ToastContainer and toast
+import "react-toastify/dist/ReactToastify.css"; // Import toast styles
 
 // Custom styled card with gradient and hover effect
 const CoolCard = styled(Card)(({ theme }) => ({
@@ -57,16 +61,44 @@ const ModalBox = styled(Box)(({ theme }) => ({
   },
 }));
 
+// Styled summary modal box for split-screen
+const SummaryModalBox = styled(Box)(({ theme }) => ({
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: "90%",
+  maxWidth: 900,
+  background: "linear-gradient(145deg, #ffffff 0%, #f0f4ff 100%)",
+  borderRadius: "20px",
+  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)",
+  padding: theme.spacing(4),
+  textAlign: "center",
+  animation: "fadeIn 0.5s ease-in-out",
+  "@keyframes fadeIn": {
+    "0%": { opacity: 0, transform: "translate(-50%, -60%)" },
+    "100%": { opacity: 1, transform: "translate(-50%, -50%)" },
+  },
+  [theme.breakpoints.down("sm")]: {
+    width: "85%",
+    padding: theme.spacing(3),
+  },
+}));
+
 const UploadFile = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
-  const [videoFile, setVideoFile] = useState(null); // New state for video
+  const [videoFile, setVideoFile] = useState(null);
+  const [fileForSummary, setFileForSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
   const [openPptxModal, setOpenPptxModal] = useState(false);
-  const [openVideoModal, setOpenVideoModal] = useState(false); // New state for video modal
+  const [openVideoModal, setOpenVideoModal] = useState(false);
+  const [openSummaryModal, setOpenSummaryModal] = useState(false);
+  const [openSummaryViewModal, setOpenSummaryViewModal] = useState(false);
+  const [summaryData, setSummaryData] = useState({ original: [], summary: [] });
 
   // Handle file change for PDF
   const handlePdfFileChange = (event) => {
@@ -92,6 +124,12 @@ const UploadFile = () => {
     if (selectedFile) setVideoFile(selectedFile);
   };
 
+  // Handle file change for Summarization
+  const handleSummaryFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setFileForSummary(selectedFile);
+  };
+
   // Open file input for PDF
   const handlePdfUploadClick = () => {
     document.getElementById("pdfFileInput").click();
@@ -112,10 +150,15 @@ const UploadFile = () => {
     document.getElementById("videoFileInput").click();
   };
 
+  // Open file input for Summarization
+  const handleSummaryUploadClick = () => {
+    document.getElementById("summaryFileInput").click();
+  };
+
   // Convert PDF to DOCX
   const handleConvertPdfToDocx = async () => {
     if (!pdfFile) {
-      alert("Please select a PDF file first");
+      toast.error("Please select a PDF file first");
       return;
     }
 
@@ -143,11 +186,12 @@ const UploadFile = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
+      toast.success("PDF converted to DOCX successfully!");
       setOpenPdfModal(false);
       setPdfFile(null);
     } catch (error) {
       console.error("Error converting PDF to DOCX:", error);
-      alert("Failed to convert PDF: " + (error.response?.data?.details || error.message));
+      toast.error("Failed to convert PDF: " + (error.response?.data?.details || error.message));
     } finally {
       setLoading(false);
     }
@@ -156,7 +200,7 @@ const UploadFile = () => {
   // Convert DOCX to PDF
   const handleConvertDocxToPdf = async () => {
     if (!docxFile) {
-      alert("Please select a DOCX file first");
+      toast.error("Please select a DOCX file first");
       return;
     }
 
@@ -182,11 +226,12 @@ const UploadFile = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
+      toast.success("DOCX converted to PDF successfully!");
       setOpenDocxModal(false);
       setDocxFile(null);
     } catch (error) {
       console.error("Error converting DOCX to PDF:", error);
-      alert("Failed to convert DOCX: " + (error.response?.data?.details || error.message));
+      toast.error("Failed to convert DOCX: " + (error.response?.data?.details || error.message));
     } finally {
       setLoading(false);
     }
@@ -195,7 +240,7 @@ const UploadFile = () => {
   // Convert PPTX to PDF
   const handleConvertPptxToPdf = async () => {
     if (!pptxFile) {
-      alert("Please select a PPTX file first");
+      toast.error("Please select a PPTX file first");
       return;
     }
 
@@ -221,11 +266,12 @@ const UploadFile = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
+      toast.success("PPTX converted to PDF successfully!");
       setOpenPptxModal(false);
       setPptxFile(null);
     } catch (error) {
       console.error("Error converting PPTX to PDF:", error);
-      alert("Failed to convert PPTX: " + (error.response?.data?.details || error.message));
+      toast.error("Failed to convert PPTX: " + (error.response?.data?.details || error.message));
     } finally {
       setLoading(false);
     }
@@ -234,7 +280,7 @@ const UploadFile = () => {
   // Convert Video to Audio
   const handleConvertVideoToAudio = async () => {
     if (!videoFile) {
-      alert("Please select a video file first");
+      toast.error("Please select a video file first");
       return;
     }
 
@@ -260,14 +306,57 @@ const UploadFile = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
+      toast.success("Video converted to audio successfully!");
       setOpenVideoModal(false);
       setVideoFile(null);
     } catch (error) {
       console.error("Error converting video to audio:", error);
-      alert("Failed to convert video: " + (error.response?.data?.details || error.message));
+      toast.error("Failed to convert video: " + (error.response?.data?.details || error.message));
     } finally {
       setLoading(false);
     }
+  };
+
+  // Summarize Document
+  const handleSummarize = async () => {
+    if (!fileForSummary) {
+      toast.error("Please select a PDF or image file first");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileForSummary);
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post("http://localhost:5000/summarize", formData);
+      setSummaryData(response.data);
+      setOpenSummaryViewModal(true); // Open new summary view modal
+      setOpenSummaryModal(false); // Close upload modal
+    } catch (error) {
+      console.error("Error summarizing document:", error);
+      toast.error("Failed to summarize: " + (error.response?.data?.details || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle copy to clipboard
+  const handleCopySummary = () => {
+    const summaryText = summaryData.summary.join("\n");
+    navigator.clipboard.writeText(summaryText).then(() => {
+      toast.success("Summary copied to clipboard!");
+    }).catch((err) => {
+      console.error("Failed to copy text: ", err);
+      toast.error("Failed to copy summary.");
+    });
+  };
+
+  // Handle back to upload summary popup
+  const handleBackToUpload = () => {
+    setOpenSummaryViewModal(false);
+    setOpenSummaryModal(true);
   };
 
   return (
@@ -301,7 +390,7 @@ const UploadFile = () => {
           flexDirection: { xs: "column", sm: "row" },
           gap: 3,
           width: "100%",
-          maxWidth: 1400, // Increased to accommodate four cards
+          maxWidth: 1400,
           justifyContent: "center",
           flexWrap: "wrap",
         }}
@@ -402,7 +491,7 @@ const UploadFile = () => {
               variant="contained"
               sx={{
                 backgroundColor: "#fff",
-                color: "#5e89e9", // New shade for distinction
+                color: "#5e89e9",
                 "&:hover": { backgroundColor: "#f0f0f0" },
                 borderRadius: "20px",
                 px: 3,
@@ -410,6 +499,33 @@ const UploadFile = () => {
               onClick={() => setOpenVideoModal(true)}
             >
               Convert Now
+            </Button>
+          </CardActions>
+        </CoolCard>
+
+        {/* Summarize Document Card */}
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              Summarize Document
+            </Typography>
+            <Typography variant="body2">
+              Upload a PDF or image to get a concise summary.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#ff9800",
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenSummaryModal(true)}
+            >
+              Summarize Now
             </Button>
           </CardActions>
         </CoolCard>
@@ -662,6 +778,171 @@ const UploadFile = () => {
           </Button>
         </ModalBox>
       </Modal>
+
+      {/* Summarize Document Upload Modal */}
+      <Modal open={openSummaryModal} onClose={() => { setOpenSummaryModal(false); setFileForSummary(null); }}>
+        <ModalBox>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ color: "#3f51b5", fontWeight: "bold" }}
+          >
+            Upload Document (PDF or Image)
+          </Typography>
+
+          <input
+            id="summaryFileInput"
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/jpg"
+            onChange={handleSummaryFileChange}
+            style={{ display: "none" }}
+          />
+
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<FileUploadIcon />}
+            onClick={handleSummaryUploadClick}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#ff9800",
+              color: "#ff9800",
+              "&:hover": { borderColor: "#f57c00" },
+            }}
+          >
+            Upload Document
+          </Button>
+
+          {fileForSummary && (
+            <Typography
+              variant="body1"
+              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
+            >
+              📄 {fileForSummary.name}
+            </Typography>
+          )}
+
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleSummarize}
+            disabled={loading || !fileForSummary}
+            sx={{
+              mt: 2,
+              mb: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #ff9800 0%, #ffca28 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #f57c00 0%, #ffb300 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Summarize"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
+      {/* Summarize Document View Modal */}
+      <Modal open={openSummaryViewModal} onClose={() => { setOpenSummaryViewModal(false); setSummaryData({ original: [], summary: [] }); }}>
+        <SummaryModalBox>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ color: "#3f51b5", fontWeight: "bold" }}
+          >
+            Summary
+          </Typography>
+
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", md: "row" },
+              gap: 2,
+              mt: 2,
+              justifyContent: "space-between",
+            }}
+          >
+            <Box
+              sx={{
+                flex: 1,
+                background: "#fff",
+                p: 2,
+                borderRadius: "12px",
+                border: "1px solid #ddd",
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>
+                Original
+              </Typography>
+              {summaryData.original.map((para, index) => (
+                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>
+                  {para}
+                </Typography>
+              ))}
+            </Box>
+            <Box
+              sx={{
+                flex: 1,
+                background: "#fff",
+                p: 2,
+                borderRadius: "12px",
+                border: "1px solid #ddd",
+                position: "relative",
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>
+                Summary
+              </Typography>
+              {summaryData.summary.map((sum, index) => (
+                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>
+                  {sum}
+                </Typography>
+              ))}
+              <IconButton
+                onClick={handleCopySummary}
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  color: "#ff9800",
+                  "&:hover": { color: "#f57c00" },
+                }}
+                aria-label="copy summary"
+              >
+                <ContentCopyIcon />
+              </IconButton>
+            </Box>
+          </Box>
+
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleBackToUpload}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              borderColor: "#ff9800",
+              color: "#ff9800",
+              "&:hover": { borderColor: "#f57c00" },
+            }}
+          >
+            Back
+          </Button>
+        </SummaryModalBox>
+      </Modal>
+
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </Box>
   );
 };

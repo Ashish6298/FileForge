@@ -10,9 +10,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-ai/generativelanguage": "^2.9.1",
+    "@google-cloud/speech": "^6.7.1",
     "@google/generative-ai": "^0.24.0",
+    "axios": "^1.8.3",
     "child_process": "^1.0.2",
     "cors": "^2.8.5",
+    "deepspeech": "^0.9.3",
     "docx": "^9.2.0",
     "docx-pdf": "^0.0.1",
     "dotenv": "^16.4.7",
