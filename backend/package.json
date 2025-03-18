@@ -29,6 +29,7 @@
     "office-to-pdf": "^4.0.0",
     "path": "^0.12.7",
     "pdf-lib": "^1.17.1",
+    "pdf-merger-js": "^5.1.2",
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
     "pdfkit": "^0.16.0",

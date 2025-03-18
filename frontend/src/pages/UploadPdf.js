@@ -15,10 +15,10 @@ import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import axios from "axios";
 import { styled } from "@mui/material/styles";
-import { ToastContainer, toast } from "react-toastify"; // Import ToastContainer and toast
-import "react-toastify/dist/ReactToastify.css"; // Import toast styles
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-// Custom styled card with gradient and hover effect
+// Custom styled card (unchanged)
 const CoolCard = styled(Card)(({ theme }) => ({
   width: "100%",
   maxWidth: 320,
@@ -37,7 +37,7 @@ const CoolCard = styled(Card)(({ theme }) => ({
   },
 }));
 
-// Styled modal box with a cool effect
+// Styled modal box (unchanged)
 const ModalBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   top: "50%",
@@ -61,7 +61,7 @@ const ModalBox = styled(Box)(({ theme }) => ({
   },
 }));
 
-// Styled summary modal box for split-screen
+// Styled summary modal box (unchanged)
 const SummaryModalBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   top: "50%",
@@ -91,6 +91,7 @@ const UploadFile = () => {
   const [pptxFile, setPptxFile] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [fileForSummary, setFileForSummary] = useState(null);
+  const [pdfFilesToMerge, setPdfFilesToMerge] = useState([null, null]); // Initialize with two slots
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
@@ -98,85 +99,110 @@ const UploadFile = () => {
   const [openVideoModal, setOpenVideoModal] = useState(false);
   const [openSummaryModal, setOpenSummaryModal] = useState(false);
   const [openSummaryViewModal, setOpenSummaryViewModal] = useState(false);
+  const [openMergeModal, setOpenMergeModal] = useState(false);
   const [summaryData, setSummaryData] = useState({ original: [], summary: [] });
 
-  // Handle file change for PDF
-  const handlePdfFileChange = (event) => {
+  // Handle file change for Merge PDFs
+  const handlePdfFileChange = (index) => (event) => {
     const selectedFile = event.target.files[0];
-    if (selectedFile) setPdfFile(selectedFile);
+    if (selectedFile) {
+      const updatedFiles = [...pdfFilesToMerge];
+      updatedFiles[index] = selectedFile;
+      setPdfFilesToMerge(updatedFiles);
+    }
   };
 
-  // Handle file change for DOCX
-  const handleDocxFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) setDocxFile(selectedFile);
+  // Add more PDF slots
+  const handleAddMorePdf = () => {
+    setPdfFilesToMerge([...pdfFilesToMerge, null]);
   };
 
-  // Handle file change for PPTX
-  const handlePptxFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) setPptxFile(selectedFile);
+  // Open file input for Merge PDFs
+  const handleMergeUploadClick = (index) => () => {
+    document.getElementById(`mergeFileInput-${index}`).click();
   };
 
-  // Handle file change for Video
-  const handleVideoFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) setVideoFile(selectedFile);
-  };
-
-  // Handle file change for Summarization
-  const handleSummaryFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) setFileForSummary(selectedFile);
-  };
-
-  // Open file input for PDF
-  const handlePdfUploadClick = () => {
-    document.getElementById("pdfFileInput").click();
-  };
-
-  // Open file input for DOCX
-  const handleDocxUploadClick = () => {
-    document.getElementById("docxFileInput").click();
-  };
-
-  // Open file input for PPTX
-  const handlePptxUploadClick = () => {
-    document.getElementById("pptxFileInput").click();
-  };
-
-  // Open file input for Video
-  const handleVideoUploadClick = () => {
-    document.getElementById("videoFileInput").click();
-  };
-
-  // Open file input for Summarization
-  const handleSummaryUploadClick = () => {
-    document.getElementById("summaryFileInput").click();
-  };
-
-  // Convert PDF to DOCX
-  const handleConvertPdfToDocx = async () => {
-    if (!pdfFile) {
-      toast.error("Please select a PDF file first");
+  // Handle Merge PDFs
+  const handleMergePdfs = async () => {
+    const validFiles = pdfFilesToMerge.filter((file) => file !== null);
+    if (validFiles.length < 2) {
+      toast.error("Please upload at least two PDF files to merge.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("pdfFile", pdfFile);
+    validFiles.forEach((file) => {
+      formData.append("pdfFiles", file);
+    });
 
     setLoading(true);
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/convert/pdf-to-docx",
+        "http://localhost:5000/merge-pdfs",
         formData,
         { responseType: "blob" }
       );
 
-      const blob = new Blob([response.data], {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `merged_${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDFs merged successfully!");
+      setOpenMergeModal(false);
+      setPdfFilesToMerge([null, null]); // Reset to initial state
+    } catch (error) {
+      console.error("Error merging PDFs:", error);
+      toast.error("Failed to merge PDFs: " + (error.response?.data?.details || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Other handlers (unchanged)
+  const handlePdfFileChangeBasic = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setPdfFile(selectedFile);
+  };
+  const handleDocxFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setDocxFile(selectedFile);
+  };
+  const handlePptxFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setPptxFile(selectedFile);
+  };
+  const handleVideoFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setVideoFile(selectedFile);
+  };
+  const handleSummaryFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setFileForSummary(selectedFile);
+  };
+  const handlePdfUploadClick = () => document.getElementById("pdfFileInput").click();
+  const handleDocxUploadClick = () => document.getElementById("docxFileInput").click();
+  const handlePptxUploadClick = () => document.getElementById("pptxFileInput").click();
+  const handleVideoUploadClick = () => document.getElementById("videoFileInput").click();
+  const handleSummaryUploadClick = () => document.getElementById("summaryFileInput").click();
+
+  const handleConvertPdfToDocx = async () => {
+    if (!pdfFile) {
+      toast.error("Please select a PDF file first");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("pdfFile", pdfFile);
+    setLoading(true);
+    try {
+      const response = await axios.post("http://localhost:5000/convert/pdf-to-docx", formData, { responseType: "blob" });
+      const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -185,7 +211,6 @@ const UploadFile = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
       toast.success("PDF converted to DOCX successfully!");
       setOpenPdfModal(false);
       setPdfFile(null);
@@ -197,25 +222,16 @@ const UploadFile = () => {
     }
   };
 
-  // Convert DOCX to PDF
   const handleConvertDocxToPdf = async () => {
     if (!docxFile) {
       toast.error("Please select a DOCX file first");
       return;
     }
-
     const formData = new FormData();
     formData.append("docxFile", docxFile);
-
     setLoading(true);
-
     try {
-      const response = await axios.post(
-        "http://localhost:5000/convert/docx-to-pdf",
-        formData,
-        { responseType: "blob" }
-      );
-
+      const response = await axios.post("http://localhost:5000/convert/docx-to-pdf", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -225,7 +241,6 @@ const UploadFile = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
       toast.success("DOCX converted to PDF successfully!");
       setOpenDocxModal(false);
       setDocxFile(null);
@@ -237,25 +252,16 @@ const UploadFile = () => {
     }
   };
 
-  // Convert PPTX to PDF
   const handleConvertPptxToPdf = async () => {
     if (!pptxFile) {
       toast.error("Please select a PPTX file first");
       return;
     }
-
     const formData = new FormData();
     formData.append("pptxFile", pptxFile);
-
     setLoading(true);
-
     try {
-      const response = await axios.post(
-        "http://localhost:5000/convert/pptx-to-pdf",
-        formData,
-        { responseType: "blob" }
-      );
-
+      const response = await axios.post("http://localhost:5000/convert/pptx-to-pdf", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -265,7 +271,6 @@ const UploadFile = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
       toast.success("PPTX converted to PDF successfully!");
       setOpenPptxModal(false);
       setPptxFile(null);
@@ -277,25 +282,16 @@ const UploadFile = () => {
     }
   };
 
-  // Convert Video to Audio
   const handleConvertVideoToAudio = async () => {
     if (!videoFile) {
       toast.error("Please select a video file first");
       return;
     }
-
     const formData = new FormData();
     formData.append("videoFile", videoFile);
-
     setLoading(true);
-
     try {
-      const response = await axios.post(
-        "http://localhost:5000/convert/video-to-audio",
-        formData,
-        { responseType: "blob" }
-      );
-
+      const response = await axios.post("http://localhost:5000/convert/video-to-audio", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "audio/mpeg" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -305,7 +301,6 @@ const UploadFile = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
       toast.success("Video converted to audio successfully!");
       setOpenVideoModal(false);
       setVideoFile(null);
@@ -317,23 +312,19 @@ const UploadFile = () => {
     }
   };
 
-  // Summarize Document
   const handleSummarize = async () => {
     if (!fileForSummary) {
       toast.error("Please select a PDF or image file first");
       return;
     }
-
     const formData = new FormData();
     formData.append("file", fileForSummary);
-
     setLoading(true);
-
     try {
       const response = await axios.post("http://localhost:5000/summarize", formData);
       setSummaryData(response.data);
-      setOpenSummaryViewModal(true); // Open new summary view modal
-      setOpenSummaryModal(false); // Close upload modal
+      setOpenSummaryViewModal(true);
+      setOpenSummaryModal(false);
     } catch (error) {
       console.error("Error summarizing document:", error);
       toast.error("Failed to summarize: " + (error.response?.data?.details || error.message));
@@ -342,7 +333,6 @@ const UploadFile = () => {
     }
   };
 
-  // Handle copy to clipboard
   const handleCopySummary = () => {
     const summaryText = summaryData.summary.join("\n");
     navigator.clipboard.writeText(summaryText).then(() => {
@@ -353,7 +343,6 @@ const UploadFile = () => {
     });
   };
 
-  // Handle back to upload summary popup
   const handleBackToUpload = () => {
     setOpenSummaryViewModal(false);
     setOpenSummaryModal(true);
@@ -395,7 +384,7 @@ const UploadFile = () => {
           flexWrap: "wrap",
         }}
       >
-        {/* PDF to DOCX Card */}
+        {/* Other cards remain unchanged */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -421,8 +410,6 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
-
-        {/* DOCX to PDF Card */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -448,8 +435,6 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
-
-        {/* PPTX to PDF Card */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -475,8 +460,6 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
-
-        {/* Video to Audio Card */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -502,8 +485,6 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
-
-        {/* Summarize Document Card */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -529,409 +510,216 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              Merge PDFs
+            </Typography>
+            <Typography variant="body2">
+              Combine multiple PDF files into a single document.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#4caf50",
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenMergeModal(true)}
+            >
+              Merge Now
+            </Button>
+          </CardActions>
+        </CoolCard>
       </Box>
 
-      {/* PDF to DOCX Modal */}
-      <Modal open={openPdfModal} onClose={() => setOpenPdfModal(false)}>
+      {/* Other Modals remain unchanged */}
+      <Modal open={openPdfModal} onClose={() => { setOpenPdfModal(false); setPdfFile(null); }}>
         <ModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Upload PDF File
           </Typography>
-
-          <input
-            id="pdfFileInput"
-            type="file"
-            accept="application/pdf"
-            onChange={handlePdfFileChange}
-            style={{ display: "none" }}
-          />
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handlePdfUploadClick}
-            sx={{
-              mb: 2,
-              borderRadius: "20px",
-              borderColor: "#6e8efb",
-              color: "#6e8efb",
-              "&:hover": { borderColor: "#5a78e0" },
-            }}
-          >
+          <input id="pdfFileInput" type="file" accept="application/pdf" onChange={handlePdfFileChangeBasic} style={{ display: "none" }} />
+          <Button variant="outlined" color="primary" startIcon={<FileUploadIcon />} onClick={handlePdfUploadClick} sx={{ mb: 2, borderRadius: "20px", borderColor: "#6e8efb", color: "#6e8efb", "&:hover": { borderColor: "#5a78e0" } }}>
             Upload PDF
           </Button>
-
-          {pdfFile && (
-            <Typography
-              variant="body1"
-              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
-            >
-              📄 {pdfFile.name}
-            </Typography>
-          )}
-
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleConvertPdfToDocx}
-            disabled={loading || !pdfFile}
-            sx={{
-              mt: 2,
-              borderRadius: "20px",
-              background: "linear-gradient(90deg, #6e8efb 0%, #a777e3 100%)",
-              "&:hover": { background: "linear-gradient(90deg, #5a78e0 0%, #9366d2 100%)" },
-            }}
-          >
+          {pdfFile && <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>📄 {pdfFile.name}</Typography>}
+          <Button variant="contained" color="primary" startIcon={<CloudUploadIcon />} onClick={handleConvertPdfToDocx} disabled={loading || !pdfFile} sx={{ mt: 2, borderRadius: "20px", background: "linear-gradient(90deg, #6e8efb 0%, #a777e3 100%)", "&:hover": { background: "linear-gradient(90deg, #5a78e0 0%, #9366d2 100%)" } }}>
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to DOCX"}
           </Button>
         </ModalBox>
       </Modal>
 
-      {/* DOCX to PDF Modal */}
-      <Modal open={openDocxModal} onClose={() => setOpenDocxModal(false)}>
+      <Modal open={openDocxModal} onClose={() => { setOpenDocxModal(false); setDocxFile(null); }}>
         <ModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Upload DOCX File
           </Typography>
-
-          <input
-            id="docxFileInput"
-            type="file"
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={handleDocxFileChange}
-            style={{ display: "none" }}
-          />
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handleDocxUploadClick}
-            sx={{
-              mb: 2,
-              borderRadius: "20px",
-              borderColor: "#a777e3",
-              color: "#a777e3",
-              "&:hover": { borderColor: "#9366d2" },
-            }}
-          >
+          <input id="docxFileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleDocxFileChange} style={{ display: "none" }} />
+          <Button variant="outlined" color="primary" startIcon={<FileUploadIcon />} onClick={handleDocxUploadClick} sx={{ mb: 2, borderRadius: "20px", borderColor: "#a777e3", color: "#a777e3", "&:hover": { borderColor: "#9366d2" } }}>
             Upload DOCX
           </Button>
-
-          {docxFile && (
-            <Typography
-              variant="body1"
-              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
-            >
-              📄 {docxFile.name}
-            </Typography>
-          )}
-
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleConvertDocxToPdf}
-            disabled={loading || !docxFile}
-            sx={{
-              mt: 2,
-              borderRadius: "20px",
-              background: "linear-gradient(90deg, #a777e3 0%, #6e8efb 100%)",
-              "&:hover": { background: "linear-gradient(90deg, #9366d2 0%, #5a78e0 100%)" },
-            }}
-          >
+          {docxFile && <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>📄 {docxFile.name}</Typography>}
+          <Button variant="contained" color="primary" startIcon={<CloudUploadIcon />} onClick={handleConvertDocxToPdf} disabled={loading || !docxFile} sx={{ mt: 2, borderRadius: "20px", background: "linear-gradient(90deg, #a777e3 0%, #6e8efb 100%)", "&:hover": { background: "linear-gradient(90deg, #9366d2 0%, #5a78e0 100%)" } }}>
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to PDF"}
           </Button>
         </ModalBox>
       </Modal>
 
-      {/* PPTX to PDF Modal */}
-      <Modal open={openPptxModal} onClose={() => setOpenPptxModal(false)}>
+      <Modal open={openPptxModal} onClose={() => { setOpenPptxModal(false); setPptxFile(null); }}>
         <ModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Upload PPTX File
           </Typography>
-
-          <input
-            id="pptxFileInput"
-            type="file"
-            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            onChange={handlePptxFileChange}
-            style={{ display: "none" }}
-          />
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handlePptxUploadClick}
-            sx={{
-              mb: 2,
-              borderRadius: "20px",
-              borderColor: "#7b5ee9",
-              color: "#7b5ee9",
-              "&:hover": { borderColor: "#694dd8" },
-            }}
-          >
+          <input id="pptxFileInput" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" onChange={handlePptxFileChange} style={{ display: "none" }} />
+          <Button variant="outlined" color="primary" startIcon={<FileUploadIcon />} onClick={handlePptxUploadClick} sx={{ mb: 2, borderRadius: "20px", borderColor: "#7b5ee9", color: "#7b5ee9", "&:hover": { borderColor: "#694dd8" } }}>
             Upload PPTX
           </Button>
-
-          {pptxFile && (
-            <Typography
-              variant="body1"
-              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
-            >
-              📄 {pptxFile.name}
-            </Typography>
-          )}
-
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleConvertPptxToPdf}
-            disabled={loading || !pptxFile}
-            sx={{
-              mt: 2,
-              borderRadius: "20px",
-              background: "linear-gradient(90deg, #7b5ee9 0%, #6e8efb 100%)",
-              "&:hover": { background: "linear-gradient(90deg, #694dd8 0%, #5a78e0 100%)" },
-            }}
-          >
+          {pptxFile && <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>📄 {pptxFile.name}</Typography>}
+          <Button variant="contained" color="primary" startIcon={<CloudUploadIcon />} onClick={handleConvertPptxToPdf} disabled={loading || !pptxFile} sx={{ mt: 2, borderRadius: "20px", background: "linear-gradient(90deg, #7b5ee9 0%, #6e8efb 100%)", "&:hover": { background: "linear-gradient(90deg, #694dd8 0%, #5a78e0 100%)" } }}>
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to PDF"}
           </Button>
         </ModalBox>
       </Modal>
 
-      {/* Video to Audio Modal */}
-      <Modal open={openVideoModal} onClose={() => setOpenVideoModal(false)}>
+      <Modal open={openVideoModal} onClose={() => { setOpenVideoModal(false); setVideoFile(null); }}>
         <ModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Upload Video File
           </Typography>
-
-          <input
-            id="videoFileInput"
-            type="file"
-            accept="video/mp4,video/avi,video/mpeg,video/quicktime"
-            onChange={handleVideoFileChange}
-            style={{ display: "none" }}
-          />
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handleVideoUploadClick}
-            sx={{
-              mb: 2,
-              borderRadius: "20px",
-              borderColor: "#5e89e9",
-              color: "#5e89e9",
-              "&:hover": { borderColor: "#4d78d8" },
-            }}
-          >
+          <input id="videoFileInput" type="file" accept="video/mp4,video/avi,video/mpeg,video/quicktime" onChange={handleVideoFileChange} style={{ display: "none" }} />
+          <Button variant="outlined" color="primary" startIcon={<FileUploadIcon />} onClick={handleVideoUploadClick} sx={{ mb: 2, borderRadius: "20px", borderColor: "#5e89e9", color: "#5e89e9", "&:hover": { borderColor: "#4d78d8" } }}>
             Upload Video
           </Button>
-
-          {videoFile && (
-            <Typography
-              variant="body1"
-              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
-            >
-              🎥 {videoFile.name}
-            </Typography>
-          )}
-
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleConvertVideoToAudio}
-            disabled={loading || !videoFile}
-            sx={{
-              mt: 2,
-              borderRadius: "20px",
-              background: "linear-gradient(90deg, #5e89e9 0%, #a777e3 100%)",
-              "&:hover": { background: "linear-gradient(90deg, #4d78d8 0%, #9366d2 100%)" },
-            }}
-          >
+          {videoFile && <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>🎥 {videoFile.name}</Typography>}
+          <Button variant="contained" color="primary" startIcon={<CloudUploadIcon />} onClick={handleConvertVideoToAudio} disabled={loading || !videoFile} sx={{ mt: 2, borderRadius: "20px", background: "linear-gradient(90deg, #5e89e9 0%, #a777e3 100%)", "&:hover": { background: "linear-gradient(90deg, #4d78d8 0%, #9366d2 100%)" } }}>
             {loading ? <CircularProgress size={24} color="inherit" /> : "Convert to MP3"}
           </Button>
         </ModalBox>
       </Modal>
 
-      {/* Summarize Document Upload Modal */}
       <Modal open={openSummaryModal} onClose={() => { setOpenSummaryModal(false); setFileForSummary(null); }}>
         <ModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Upload Document (PDF or Image)
           </Typography>
-
-          <input
-            id="summaryFileInput"
-            type="file"
-            accept="application/pdf,image/png,image/jpeg,image/jpg"
-            onChange={handleSummaryFileChange}
-            style={{ display: "none" }}
-          />
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handleSummaryUploadClick}
-            sx={{
-              mb: 2,
-              borderRadius: "20px",
-              borderColor: "#ff9800",
-              color: "#ff9800",
-              "&:hover": { borderColor: "#f57c00" },
-            }}
-          >
+          <input id="summaryFileInput" type="file" accept="application/pdf,image/png,image/jpeg,image/jpg" onChange={handleSummaryFileChange} style={{ display: "none" }} />
+          <Button variant="outlined" color="primary" startIcon={<FileUploadIcon />} onClick={handleSummaryUploadClick} sx={{ mb: 2, borderRadius: "20px", borderColor: "#ff9800", color: "#ff9800", "&:hover": { borderColor: "#f57c00" } }}>
             Upload Document
           </Button>
-
-          {fileForSummary && (
-            <Typography
-              variant="body1"
-              sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}
-            >
-              📄 {fileForSummary.name}
-            </Typography>
-          )}
-
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleSummarize}
-            disabled={loading || !fileForSummary}
-            sx={{
-              mt: 2,
-              mb: 2,
-              borderRadius: "20px",
-              background: "linear-gradient(90deg, #ff9800 0%, #ffca28 100%)",
-              "&:hover": { background: "linear-gradient(90deg, #f57c00 0%, #ffb300 100%)" },
-            }}
-          >
+          {fileForSummary && <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>📄 {fileForSummary.name}</Typography>}
+          <Button variant="contained" color="primary" startIcon={<CloudUploadIcon />} onClick={handleSummarize} disabled={loading || !fileForSummary} sx={{ mt: 2, mb: 2, borderRadius: "20px", background: "linear-gradient(90deg, #ff9800 0%, #ffca28 100%)", "&:hover": { background: "linear-gradient(90deg, #f57c00 0%, #ffb300 100%)" } }}>
             {loading ? <CircularProgress size={24} color="inherit" /> : "Summarize"}
           </Button>
         </ModalBox>
       </Modal>
 
-      {/* Summarize Document View Modal */}
       <Modal open={openSummaryViewModal} onClose={() => { setOpenSummaryViewModal(false); setSummaryData({ original: [], summary: [] }); }}>
         <SummaryModalBox>
-          <Typography
-            variant="h6"
-            gutterBottom
-            sx={{ color: "#3f51b5", fontWeight: "bold" }}
-          >
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Summary
           </Typography>
-
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", md: "row" },
-              gap: 2,
-              mt: 2,
-              justifyContent: "space-between",
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1,
-                background: "#fff",
-                p: 2,
-                borderRadius: "12px",
-                border: "1px solid #ddd",
-              }}
-            >
-              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>
-                Original
-              </Typography>
+          <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 2, mt: 2, justifyContent: "space-between" }}>
+            <Box sx={{ flex: 1, background: "#fff", p: 2, borderRadius: "12px", border: "1px solid #ddd" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>Original</Typography>
               {summaryData.original.map((para, index) => (
-                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>
-                  {para}
-                </Typography>
+                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>{para}</Typography>
               ))}
             </Box>
-            <Box
-              sx={{
-                flex: 1,
-                background: "#fff",
-                p: 2,
-                borderRadius: "12px",
-                border: "1px solid #ddd",
-                position: "relative",
-              }}
-            >
-              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>
-                Summary
-              </Typography>
+            <Box sx={{ flex: 1, background: "#fff", p: 2, borderRadius: "12px", border: "1px solid #ddd", position: "relative" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#3f51b5" }}>Summary</Typography>
               {summaryData.summary.map((sum, index) => (
-                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>
-                  {sum}
-                </Typography>
+                <Typography key={index} variant="body2" sx={{ mt: 1, color: "#555" }}>{sum}</Typography>
               ))}
-              <IconButton
-                onClick={handleCopySummary}
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  color: "#ff9800",
-                  "&:hover": { color: "#f57c00" },
-                }}
-                aria-label="copy summary"
-              >
+              <IconButton onClick={handleCopySummary} sx={{ position: "absolute", top: 8, right: 8, color: "#ff9800", "&:hover": { color: "#f57c00" } }} aria-label="copy summary">
                 <ContentCopyIcon />
               </IconButton>
             </Box>
           </Box>
-
-          <Button
-            variant="outlined"
-            color="primary"
-            onClick={handleBackToUpload}
-            sx={{
-              mt: 2,
-              borderRadius: "20px",
-              borderColor: "#ff9800",
-              color: "#ff9800",
-              "&:hover": { borderColor: "#f57c00" },
-            }}
-          >
+          <Button variant="outlined" color="primary" onClick={handleBackToUpload} sx={{ mt: 2, borderRadius: "20px", borderColor: "#ff9800", color: "#ff9800", "&:hover": { borderColor: "#f57c00" } }}>
             Back
           </Button>
         </SummaryModalBox>
       </Modal>
 
-      {/* Toast Container */}
+      {/* Merge PDFs Modal */}
+      <Modal open={openMergeModal} onClose={() => { setOpenMergeModal(false); setPdfFilesToMerge([null, null]); }}>
+        <ModalBox>
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
+            Merge PDF Files
+          </Typography>
+
+          {/* Dynamic File Inputs */}
+          {pdfFilesToMerge.map((file, index) => (
+            <Box key={index} sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              <input
+                id={`mergeFileInput-${index}`}
+                type="file"
+                accept="application/pdf"
+                onChange={handlePdfFileChange(index)}
+                style={{ display: "none" }}
+              />
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<FileUploadIcon />}
+                onClick={handleMergeUploadClick(index)}
+                sx={{
+                  mr: 2,
+                  borderRadius: "20px",
+                  borderColor: "#4caf50",
+                  color: "#4caf50",
+                  "&:hover": { borderColor: "#388e3c" },
+                }}
+              >
+                {file ? "Replace PDF" : `Upload PDF ${index + 1}`}
+              </Button>
+              {file && (
+                <Typography variant="body1" sx={{ color: "#555", wordBreak: "break-word" }}>
+                  📄 {file.name}
+                </Typography>
+              )}
+            </Box>
+          ))}
+
+          {/* Add More PDFs Button */}
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleAddMorePdf}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#4caf50",
+              color: "#4caf50",
+              "&:hover": { borderColor: "#388e3c" },
+            }}
+          >
+            Add More PDFs
+          </Button>
+
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleMergePdfs}
+            disabled={loading || pdfFilesToMerge.filter((file) => file !== null).length < 2}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #4caf50 0%, #66bb6a 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #388e3c 0%, #43a047 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Merge PDFs"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
       <ToastContainer
         position="top-right"
         autoClose={3000}
