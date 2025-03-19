@@ -16,12 +16,16 @@ const axios = require("axios");
 const Tesseract = require("tesseract.js");
 const dotenv = require("dotenv");
 const { PDFDocument: PDFLibDocument } = require("pdf-lib");
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 
 // Load environment variables
 dotenv.config();
 
 // Set FFmpeg path explicitly
-ffmpeg.setFfmpegPath("D:\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\bin\\ffmpeg.exe");
+// ffmpeg.setFfmpegPath("D:\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\ffmpeg-2025-02-06-git-6da82b4485-full_build\\bin\\ffmpeg.exe");
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
 
 // Initialize Express app
 const app = express();
