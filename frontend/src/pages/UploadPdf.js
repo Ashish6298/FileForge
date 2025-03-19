@@ -1,3 +1,4 @@
+// UploadFile.jsx
 import { useState } from "react";
 import {
   Button,
@@ -13,10 +14,12 @@ import {
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteIcon from "@mui/icons-material/Delete"; // Added for delete button
 import axios from "axios";
 import { styled } from "@mui/material/styles";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { PDFDocument } from "pdf-lib"; // Added for client-side PDF splitting
 
 // Custom styled card (unchanged)
 const CoolCard = styled(Card)(({ theme }) => ({
@@ -85,13 +88,41 @@ const SummaryModalBox = styled(Box)(({ theme }) => ({
   },
 }));
 
+// Styled split modal box (new, larger for displaying pages)
+const SplitModalBox = styled(Box)(({ theme }) => ({
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: "90%",
+  maxWidth: 900,
+  maxHeight: "80vh",
+  overflowY: "auto",
+  background: "linear-gradient(145deg, #ffffff 0%, #f0f4ff 100%)",
+  borderRadius: "20px",
+  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)",
+  padding: theme.spacing(4),
+  textAlign: "center",
+  animation: "fadeIn 0.5s ease-in-out",
+  "@keyframes fadeIn": {
+    "0%": { opacity: 0, transform: "translate(-50%, -60%)" },
+    "100%": { opacity: 1, transform: "translate(-50%, -50%)" },
+  },
+  [theme.breakpoints.down("sm")]: {
+    width: "85%",
+    padding: theme.spacing(3),
+  },
+}));
+
 const UploadFile = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [fileForSummary, setFileForSummary] = useState(null);
-  const [pdfFilesToMerge, setPdfFilesToMerge] = useState([null, null]); // Initialize with two slots
+  const [pdfFilesToMerge, setPdfFilesToMerge] = useState([null, null]);
+  const [splitFile, setSplitFile] = useState(null); // New state for split PDF
+  const [splitPages, setSplitPages] = useState([]); // Array of page previews
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
@@ -100,9 +131,11 @@ const UploadFile = () => {
   const [openSummaryModal, setOpenSummaryModal] = useState(false);
   const [openSummaryViewModal, setOpenSummaryViewModal] = useState(false);
   const [openMergeModal, setOpenMergeModal] = useState(false);
+  const [openSplitModal, setOpenSplitModal] = useState(false); // New modal state
+  const [openSplitViewModal, setOpenSplitViewModal] = useState(false); // New view modal state
   const [summaryData, setSummaryData] = useState({ original: [], summary: [] });
 
-  // Handle file change for Merge PDFs
+  // Existing handlers (unchanged)
   const handlePdfFileChange = (index) => (event) => {
     const selectedFile = event.target.files[0];
     if (selectedFile) {
@@ -112,17 +145,14 @@ const UploadFile = () => {
     }
   };
 
-  // Add more PDF slots
   const handleAddMorePdf = () => {
     setPdfFilesToMerge([...pdfFilesToMerge, null]);
   };
 
-  // Open file input for Merge PDFs
   const handleMergeUploadClick = (index) => () => {
     document.getElementById(`mergeFileInput-${index}`).click();
   };
 
-  // Handle Merge PDFs
   const handleMergePdfs = async () => {
     const validFiles = pdfFilesToMerge.filter((file) => file !== null);
     if (validFiles.length < 2) {
@@ -156,7 +186,7 @@ const UploadFile = () => {
 
       toast.success("PDFs merged successfully!");
       setOpenMergeModal(false);
-      setPdfFilesToMerge([null, null]); // Reset to initial state
+      setPdfFilesToMerge([null, null]);
     } catch (error) {
       console.error("Error merging PDFs:", error);
       toast.error("Failed to merge PDFs: " + (error.response?.data?.details || error.message));
@@ -165,7 +195,6 @@ const UploadFile = () => {
     }
   };
 
-  // Other handlers (unchanged)
   const handlePdfFileChangeBasic = (event) => {
     const selectedFile = event.target.files[0];
     if (selectedFile) setPdfFile(selectedFile);
@@ -348,6 +377,103 @@ const UploadFile = () => {
     setOpenSummaryModal(true);
   };
 
+  // New handlers for Split PDF
+  const handleSplitFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setSplitFile(selectedFile);
+  };
+
+  const handleSplitUploadClick = () => {
+    document.getElementById("splitFileInput").click();
+  };
+
+  const handleSplitPdf = async () => {
+    if (!splitFile) {
+      toast.error("Please select a PDF file to split.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const arrayBuffer = await splitFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const totalPages = pdfDoc.getPageCount();
+
+      if (totalPages <= 1) {
+        toast.error("PDF must have more than one page to split.");
+        setLoading(false);
+        return;
+      }
+
+      const pagePreviews = [];
+      for (let i = 0; i < totalPages; i++) {
+        const newPdf = await PDFDocument.create();
+        const [copiedPage] = await newPdf.copyPages(pdfDoc, [i]);
+        newPdf.addPage(copiedPage);
+        const pdfBytes = await newPdf.save();
+        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        pagePreviews.push({ url, pageNumber: i + 1 });
+      }
+
+      setSplitPages(pagePreviews);
+      setOpenSplitModal(false);
+      setOpenSplitViewModal(true);
+      toast.success("PDF split successfully!");
+    } catch (error) {
+      console.error("Error splitting PDF:", error);
+      toast.error("Failed to split PDF: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePage = (index) => {
+    const updatedPages = splitPages.filter((_, i) => i !== index);
+    setSplitPages(updatedPages);
+    toast.success(`Page ${splitPages[index].pageNumber} deleted!`);
+  };
+
+  const handleSaveSplitPdf = async () => {
+    if (splitPages.length === 0) {
+      toast.error("No pages left to save!");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const newPdf = await PDFDocument.create();
+      for (const page of splitPages) {
+        const pagePdf = await PDFDocument.load(await (await fetch(page.url)).arrayBuffer());
+        const [copiedPage] = await newPdf.copyPages(pagePdf, [0]);
+        newPdf.addPage(copiedPage);
+      }
+
+      const pdfBytes = await newPdf.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${splitFile.name.replace(".pdf", "")}_modified.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Modified PDF saved successfully!");
+      setOpenSplitViewModal(false);
+      setSplitFile(null);
+      setSplitPages([]);
+    } catch (error) {
+      console.error("Error saving split PDF:", error);
+      toast.error("Failed to save PDF: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -384,7 +510,7 @@ const UploadFile = () => {
           flexWrap: "wrap",
         }}
       >
-        {/* Other cards remain unchanged */}
+        {/* Existing cards */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -535,9 +661,35 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
+        {/* New Split PDF Card */}
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              Split PDF
+            </Typography>
+            <Typography variant="body2">
+              Split your PDF into individual pages and edit them.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#f44336",
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenSplitModal(true)}
+            >
+              Split Now
+            </Button>
+          </CardActions>
+        </CoolCard>
       </Box>
 
-      {/* Other Modals remain unchanged */}
+      {/* Existing Modals */}
       <Modal open={openPdfModal} onClose={() => { setOpenPdfModal(false); setPdfFile(null); }}>
         <ModalBox>
           <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
@@ -646,14 +798,11 @@ const UploadFile = () => {
         </SummaryModalBox>
       </Modal>
 
-      {/* Merge PDFs Modal */}
       <Modal open={openMergeModal} onClose={() => { setOpenMergeModal(false); setPdfFilesToMerge([null, null]); }}>
         <ModalBox>
           <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
             Merge PDF Files
           </Typography>
-
-          {/* Dynamic File Inputs */}
           {pdfFilesToMerge.map((file, index) => (
             <Box key={index} sx={{ display: "flex", alignItems: "center", mb: 2 }}>
               <input
@@ -685,8 +834,6 @@ const UploadFile = () => {
               )}
             </Box>
           ))}
-
-          {/* Add More PDFs Button */}
           <Button
             variant="outlined"
             color="secondary"
@@ -701,7 +848,6 @@ const UploadFile = () => {
           >
             Add More PDFs
           </Button>
-
           <Button
             variant="contained"
             color="primary"
@@ -718,6 +864,107 @@ const UploadFile = () => {
             {loading ? <CircularProgress size={24} color="inherit" /> : "Merge PDFs"}
           </Button>
         </ModalBox>
+      </Modal>
+
+      {/* New Split PDF Upload Modal */}
+      <Modal open={openSplitModal} onClose={() => { setOpenSplitModal(false); setSplitFile(null); }}>
+        <ModalBox>
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
+            Upload PDF to Split
+          </Typography>
+          <input
+            id="splitFileInput"
+            type="file"
+            accept="application/pdf"
+            onChange={handleSplitFileChange}
+            style={{ display: "none" }}
+          />
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<FileUploadIcon />}
+            onClick={handleSplitUploadClick}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#f44336",
+              color: "#f44336",
+              "&:hover": { borderColor: "#d32f2f" },
+            }}
+          >
+            Upload PDF
+          </Button>
+          {splitFile && (
+            <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>
+              📄 {splitFile.name}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleSplitPdf}
+            disabled={loading || !splitFile}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #f44336 0%, #ef5350 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #d32f2f 0%, #e53935 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Split PDF"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
+      {/* New Split PDF View Modal */}
+      <Modal open={openSplitViewModal} onClose={() => { setOpenSplitViewModal(false); setSplitPages([]); setSplitFile(null); }}>
+        <SplitModalBox>
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
+            Split PDF Pages
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center", mt: 2 }}>
+            {splitPages.map((page, index) => (
+              <Box key={index} sx={{ position: "relative", width: 200, height: 280, border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
+                <iframe
+                  src={page.url}
+                  title={`Page ${page.pageNumber}`}
+                  width="100%"
+                  height="100%"
+                  style={{ border: "none" }}
+                />
+                <IconButton
+                  onClick={() => handleDeletePage(index)}
+                  sx={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    color: "#f44336",
+                    backgroundColor: "rgba(255, 255, 255, 0.8)",
+                    "&:hover": { backgroundColor: "rgba(255, 255, 255, 1)", color: "#d32f2f" },
+                  }}
+                  aria-label={`delete page ${page.pageNumber}`}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+          </Box>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSaveSplitPdf}
+            disabled={loading || splitPages.length === 0}
+            sx={{
+              mt: 3,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #f44336 0%, #ef5350 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #d32f2f 0%, #e53935 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Save Modified PDF"}
+          </Button>
+        </SplitModalBox>
       </Modal>
 
       <ToastContainer
