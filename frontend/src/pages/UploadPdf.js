@@ -175,7 +175,7 @@ const UploadFile = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/merge-pdfs",
+        "https://fileforge.onrender.com/merge-pdfs",
         formData,
         { responseType: "blob" }
       );
@@ -247,7 +247,7 @@ const UploadFile = () => {
     formData.append("pdfFile", pdfFile);
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/convert/pdf-to-docx", formData, { responseType: "blob" });
+      const response = await axios.post("https://fileforge.onrender.com/convert/pdf-to-docx", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -277,7 +277,7 @@ const UploadFile = () => {
     formData.append("docxFile", docxFile);
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/convert/docx-to-pdf", formData, { responseType: "blob" });
+      const response = await axios.post("https://fileforge.onrender.com/convert/docx-to-pdf", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -307,7 +307,7 @@ const UploadFile = () => {
     formData.append("pptxFile", pptxFile);
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/convert/pptx-to-pdf", formData, { responseType: "blob" });
+      const response = await axios.post("https://fileforge.onrender.com/convert/pptx-to-pdf", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -337,7 +337,7 @@ const UploadFile = () => {
     formData.append("videoFile", videoFile);
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/convert/video-to-audio", formData, { responseType: "blob" });
+      const response = await axios.post("https://fileforge.onrender.com/convert/video-to-audio", formData, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "audio/mpeg" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -367,7 +367,7 @@ const UploadFile = () => {
     formData.append("file", fileForSummary);
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/summarize", formData);
+      const response = await axios.post("https://fileforge.onrender.com/summarize", formData);
       setSummaryData(response.data);
       setOpenSummaryViewModal(true);
       setOpenSummaryModal(false);
@@ -552,7 +552,7 @@ const UploadFile = () => {
       formData.append("pageOrder", pageOrder);
 
       const response = await axios.post(
-        "http://localhost:5000/rearrange-pdf",
+        "https://fileforge.onrender.com/rearrange-pdf",
         formData,
         { responseType: "blob" }
       );
