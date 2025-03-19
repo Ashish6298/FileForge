@@ -1,6 +1,4 @@
-
-
-//server.js
+// server.js
 
 const express = require("express");
 const multer = require("multer");
@@ -129,12 +127,20 @@ const uploadSplitPdf = multer({
   },
 });
 
+// Multer upload middleware for Rearrange PDF (disk, single file)
+const uploadRearrangePdf = multer({
+  storage: diskStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["application/pdf"];
+    if (!allowedTypes.includes(file.mimetype)) return cb(new Error("Only PDF files are allowed"));
+    cb(null, true);
+  },
+});
+
 // Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
-
-// Existing conversion functions remain unchanged...
-// (convertPdfToDocx, convertDocxToPdf, convertPptxToPdf, convertVideoToAudio, summarizeParagraphs, mergePdfs)
 
 // Function to convert PDF to DOCX
 const convertPdfToDocx = async (pdfPath) => {
@@ -470,6 +476,57 @@ const splitPdf = async (pdfPath) => {
   }
 };
 
+// Function to rearrange PDF pages
+const rearrangePdfPages = async (pdfPath, pageOrder) => {
+  try {
+    const pdfBytes = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFLibDocument.load(pdfBytes);
+    const totalPages = pdfDoc.getPageCount();
+    console.log(`✅ Loaded PDF for rearrangement: ${pdfPath}, pages: ${totalPages}`);
+
+    // Validate page order
+    const pageNumbers = pageOrder.split(',').map(num => parseInt(num.trim()) - 1); // Convert to 0-based index
+    if (pageNumbers.length !== totalPages) {
+      throw new Error(`Invalid page order: must specify exactly ${totalPages} pages`);
+    }
+    
+    const uniquePages = new Set(pageNumbers);
+    if (uniquePages.size !== totalPages || 
+        Math.min(...pageNumbers) < 0 || 
+        Math.max(...pageNumbers) >= totalPages) {
+      throw new Error(`Invalid page order: must contain unique numbers from 1 to ${totalPages}`);
+    }
+
+    // Create new PDF with rearranged pages
+    const newPdf = await PDFLibDocument.create();
+    const pages = await pdfDoc.getPages();
+    const rearrangedPages = pageNumbers.map(index => pages[index]);
+    
+    // Add pages in new order
+    const copiedPages = await newPdf.copyPages(pdfDoc, pageNumbers);
+    copiedPages.forEach((page) => newPdf.addPage(page));
+    console.log(`✅ Rearranged ${totalPages} pages in new order: ${pageOrder}`);
+
+    newPdf.setProducer("xAI Grok 3 - PDF Rearranger");
+    newPdf.setCreator("xAI Grok 3");
+
+    const rearrangedPdfBytes = await newPdf.save({
+      useObjectStreams: true,
+      updateFieldAppearances: false,
+      compress: true,
+    });
+    console.log("✅ Rearranged PDF created, size:", rearrangedPdfBytes.length);
+
+    fs.unlinkSync(pdfPath);
+    console.log("✅ Uploaded PDF file deleted");
+
+    return rearrangedPdfBytes;
+  } catch (error) {
+    console.error("❌ Error in rearrangePdfPages:", error.message, error.stack);
+    throw error;
+  }
+};
+
 // Routes
 app.post("/convert/pdf-to-docx", uploadPdfSingle.single("pdfFile"), async (req, res) => {
   if (!req.file) return res.status(400).send("No file uploaded");
@@ -622,6 +679,28 @@ app.post("/split-pdf", uploadSplitPdf.single("pdfFile"), async (req, res) => {
   } catch (error) {
     console.error("❌ Error in /split-pdf route:", error.message);
     res.status(500).json({ error: "Failed to split PDF", details: error.message });
+  }
+});
+
+app.post("/rearrange-pdf", uploadRearrangePdf.single("pdfFile"), async (req, res) => {
+  if (!req.file) return res.status(400).send("No file uploaded");
+  if (!req.body.pageOrder) return res.status(400).send("Page order is required");
+
+  console.log("Uploaded file:", req.file);
+  console.log("Requested page order:", req.body.pageOrder);
+
+  try {
+    const rearrangedPdfBytes = await rearrangePdfPages(req.file.path, req.body.pageOrder);
+    const originalName = path.parse(req.file.originalname).name;
+
+    res.setHeader("Content-Disposition", `attachment; filename="${originalName}_rearranged.pdf"`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", rearrangedPdfBytes.length);
+
+    res.send(Buffer.from(rearrangedPdfBytes));
+  } catch (error) {
+    console.error("❌ Error in /rearrange-pdf route:", error.message);
+    res.status(500).json({ error: "Failed to rearrange PDF", details: error.message });
   }
 });
 

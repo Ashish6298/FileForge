@@ -14,14 +14,16 @@ import {
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import DeleteIcon from "@mui/icons-material/Delete"; // Added for delete button
+import DeleteIcon from "@mui/icons-material/Delete";
+import ArrowLeftIcon from "@mui/icons-material/ArrowLeft";
+import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import axios from "axios";
 import { styled } from "@mui/material/styles";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { PDFDocument } from "pdf-lib"; // Added for client-side PDF splitting
+import { PDFDocument } from "pdf-lib";
 
-// Custom styled card (unchanged)
+// Custom styled card
 const CoolCard = styled(Card)(({ theme }) => ({
   width: "100%",
   maxWidth: 320,
@@ -40,7 +42,7 @@ const CoolCard = styled(Card)(({ theme }) => ({
   },
 }));
 
-// Styled modal box (unchanged)
+// Styled modal box
 const ModalBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   top: "50%",
@@ -64,7 +66,7 @@ const ModalBox = styled(Box)(({ theme }) => ({
   },
 }));
 
-// Styled summary modal box (unchanged)
+// Styled summary modal box
 const SummaryModalBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   top: "50%",
@@ -88,7 +90,7 @@ const SummaryModalBox = styled(Box)(({ theme }) => ({
   },
 }));
 
-// Styled split modal box (new, larger for displaying pages)
+// Styled split/rearrange modal box
 const SplitModalBox = styled(Box)(({ theme }) => ({
   position: "absolute",
   top: "50%",
@@ -121,8 +123,10 @@ const UploadFile = () => {
   const [videoFile, setVideoFile] = useState(null);
   const [fileForSummary, setFileForSummary] = useState(null);
   const [pdfFilesToMerge, setPdfFilesToMerge] = useState([null, null]);
-  const [splitFile, setSplitFile] = useState(null); // New state for split PDF
-  const [splitPages, setSplitPages] = useState([]); // Array of page previews
+  const [splitFile, setSplitFile] = useState(null);
+  const [rearrangeFile, setRearrangeFile] = useState(null);
+  const [splitPages, setSplitPages] = useState([]);
+  const [rearrangePages, setRearrangePages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openPdfModal, setOpenPdfModal] = useState(false);
   const [openDocxModal, setOpenDocxModal] = useState(false);
@@ -131,11 +135,13 @@ const UploadFile = () => {
   const [openSummaryModal, setOpenSummaryModal] = useState(false);
   const [openSummaryViewModal, setOpenSummaryViewModal] = useState(false);
   const [openMergeModal, setOpenMergeModal] = useState(false);
-  const [openSplitModal, setOpenSplitModal] = useState(false); // New modal state
-  const [openSplitViewModal, setOpenSplitViewModal] = useState(false); // New view modal state
+  const [openSplitModal, setOpenSplitModal] = useState(false);
+  const [openSplitViewModal, setOpenSplitViewModal] = useState(false);
+  const [openRearrangeModal, setOpenRearrangeModal] = useState(false);
+  const [openRearrangeViewModal, setOpenRearrangeViewModal] = useState(false);
   const [summaryData, setSummaryData] = useState({ original: [], summary: [] });
 
-  // Existing handlers (unchanged)
+  // Existing handlers (unchanged except for Rearrange PDF section)
   const handlePdfFileChange = (index) => (event) => {
     const selectedFile = event.target.files[0];
     if (selectedFile) {
@@ -215,11 +221,22 @@ const UploadFile = () => {
     const selectedFile = event.target.files[0];
     if (selectedFile) setFileForSummary(selectedFile);
   };
+  const handleSplitFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setSplitFile(selectedFile);
+  };
+  const handleRearrangeFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) setRearrangeFile(selectedFile);
+  };
+
   const handlePdfUploadClick = () => document.getElementById("pdfFileInput").click();
   const handleDocxUploadClick = () => document.getElementById("docxFileInput").click();
   const handlePptxUploadClick = () => document.getElementById("pptxFileInput").click();
   const handleVideoUploadClick = () => document.getElementById("videoFileInput").click();
   const handleSummaryUploadClick = () => document.getElementById("summaryFileInput").click();
+  const handleSplitUploadClick = () => document.getElementById("splitFileInput").click();
+  const handleRearrangeUploadClick = () => document.getElementById("rearrangeFileInput").click();
 
   const handleConvertPdfToDocx = async () => {
     if (!pdfFile) {
@@ -377,16 +394,6 @@ const UploadFile = () => {
     setOpenSummaryModal(true);
   };
 
-  // New handlers for Split PDF
-  const handleSplitFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) setSplitFile(selectedFile);
-  };
-
-  const handleSplitUploadClick = () => {
-    document.getElementById("splitFileInput").click();
-  };
-
   const handleSplitPdf = async () => {
     if (!splitFile) {
       toast.error("Please select a PDF file to split.");
@@ -474,6 +481,104 @@ const UploadFile = () => {
     }
   };
 
+  // Rearrange PDF handlers
+  const handlePreviewRearrangePdf = async () => {
+    if (!rearrangeFile) {
+      toast.error("Please select a PDF file to rearrange.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const arrayBuffer = await rearrangeFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const totalPages = pdfDoc.getPageCount();
+
+      if (totalPages <= 1) {
+        toast.error("PDF must have more than one page to rearrange.");
+        setLoading(false);
+        return;
+      }
+
+      const pagePreviews = [];
+      for (let i = 0; i < totalPages; i++) {
+        const newPdf = await PDFDocument.create();
+        const [copiedPage] = await newPdf.copyPages(pdfDoc, [i]);
+        newPdf.addPage(copiedPage);
+        const pdfBytes = await newPdf.save();
+        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        pagePreviews.push({ url, pageNumber: i + 1 });
+      }
+
+      setRearrangePages(pagePreviews);
+      setOpenRearrangeModal(false);
+      setOpenRearrangeViewModal(true);
+      toast.success("PDF pages ready for rearrangement!");
+    } catch (error) {
+      console.error("Error previewing PDF for rearrangement:", error);
+      toast.error("Failed to preview PDF: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMovePage = (index, direction) => {
+    const newPages = [...rearrangePages];
+    if (direction === "left" && index > 0) {
+      [newPages[index - 1], newPages[index]] = [newPages[index], newPages[index - 1]];
+      setRearrangePages(newPages);
+      toast.success(`Moved page ${rearrangePages[index].pageNumber} left!`);
+    } else if (direction === "right" && index < rearrangePages.length - 1) {
+      [newPages[index], newPages[index + 1]] = [newPages[index + 1], newPages[index]];
+      setRearrangePages(newPages);
+      toast.success(`Moved page ${rearrangePages[index].pageNumber} right!`);
+    }
+  };
+
+  const handleRearrangePdf = async () => {
+    if (!rearrangeFile || rearrangePages.length === 0) {
+      toast.error("No pages to rearrange.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const pageOrder = rearrangePages.map(page => page.pageNumber).join(",");
+      const formData = new FormData();
+      formData.append("pdfFile", rearrangeFile);
+      formData.append("pageOrder", pageOrder);
+
+      const response = await axios.post(
+        "http://localhost:5000/rearrange-pdf",
+        formData,
+        { responseType: "blob" }
+      );
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${rearrangeFile.name.replace(".pdf", "")}_rearranged.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF rearranged successfully!");
+      setOpenRearrangeViewModal(false);
+      setRearrangeFile(null);
+      setRearrangePages([]);
+    } catch (error) {
+      console.error("Error rearranging PDF:", error);
+      toast.error("Failed to rearrange PDF: " + (error.response?.data?.details || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -510,7 +615,6 @@ const UploadFile = () => {
           flexWrap: "wrap",
         }}
       >
-        {/* Existing cards */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -661,7 +765,6 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
-        {/* New Split PDF Card */}
         <CoolCard>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
@@ -687,9 +790,34 @@ const UploadFile = () => {
             </Button>
           </CardActions>
         </CoolCard>
+        <CoolCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+              Rearrange PDF
+            </Typography>
+            <Typography variant="body2">
+              Reorder pages in your PDF as desired.
+            </Typography>
+          </CardContent>
+          <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "#fff",
+                color: "#2196f3",
+                "&:hover": { backgroundColor: "#f0f0f0" },
+                borderRadius: "20px",
+                px: 3,
+              }}
+              onClick={() => setOpenRearrangeModal(true)}
+            >
+              Rearrange Now
+            </Button>
+          </CardActions>
+        </CoolCard>
       </Box>
 
-      {/* Existing Modals */}
+      {/* Existing Modals (unchanged except for Rearrange PDF) */}
       <Modal open={openPdfModal} onClose={() => { setOpenPdfModal(false); setPdfFile(null); }}>
         <ModalBox>
           <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
@@ -866,7 +994,6 @@ const UploadFile = () => {
         </ModalBox>
       </Modal>
 
-      {/* New Split PDF Upload Modal */}
       <Modal open={openSplitModal} onClose={() => { setOpenSplitModal(false); setSplitFile(null); }}>
         <ModalBox>
           <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
@@ -917,7 +1044,6 @@ const UploadFile = () => {
         </ModalBox>
       </Modal>
 
-      {/* New Split PDF View Modal */}
       <Modal open={openSplitViewModal} onClose={() => { setOpenSplitViewModal(false); setSplitPages([]); setSplitFile(null); }}>
         <SplitModalBox>
           <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
@@ -963,6 +1089,142 @@ const UploadFile = () => {
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : "Save Modified PDF"}
+          </Button>
+        </SplitModalBox>
+      </Modal>
+
+      {/* Rearrange PDF Upload Modal */}
+      <Modal open={openRearrangeModal} onClose={() => { setOpenRearrangeModal(false); setRearrangeFile(null); }}>
+        <ModalBox>
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
+            Upload PDF to Rearrange
+          </Typography>
+          <input
+            id="rearrangeFileInput"
+            type="file"
+            accept="application/pdf"
+            onChange={handleRearrangeFileChange}
+            style={{ display: "none" }}
+          />
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<FileUploadIcon />}
+            onClick={handleRearrangeUploadClick}
+            sx={{
+              mb: 2,
+              borderRadius: "20px",
+              borderColor: "#2196f3",
+              color: "#2196f3",
+              "&:hover": { borderColor: "#1976d2" },
+            }}
+          >
+            Upload PDF
+          </Button>
+          {rearrangeFile && (
+            <Typography variant="body1" sx={{ mt: 2, color: "#555", wordBreak: "break-word" }}>
+              📄 {rearrangeFile.name}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudUploadIcon />}
+            onClick={handlePreviewRearrangePdf}
+            disabled={loading || !rearrangeFile}
+            sx={{
+              mt: 2,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #2196f3 0%, #42a5f5 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #1976d2 0%, #2196f3 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Preview Pages"}
+          </Button>
+        </ModalBox>
+      </Modal>
+
+      {/* Rearrange PDF View Modal with Left and Right Arrow Buttons */}
+      <Modal open={openRearrangeViewModal} onClose={() => { setOpenRearrangeViewModal(false); setRearrangePages([]); setRearrangeFile(null); }}>
+        <SplitModalBox>
+          <Typography variant="h6" gutterBottom sx={{ color: "#3f51b5", fontWeight: "bold" }}>
+            Rearrange PDF Pages
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2, color: "#555" }}>
+            Use the arrow buttons to move pages left or right.
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center", mt: 2 }}>
+            {rearrangePages.map((page, index) => (
+              <Box
+                key={index}
+                sx={{
+                  position: "relative",
+                  width: 200,
+                  height: 280,
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                }}
+              >
+                <iframe
+                  src={page.url}
+                  title={`Page ${page.pageNumber}`}
+                  width="100%"
+                  height="100%"
+                  style={{ border: "none" }}
+                />
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: 8,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    display: "flex",
+                    gap: 1,
+                    backgroundColor: "rgba(255, 255, 255, 0.8)",
+                    borderRadius: "4px",
+                    p: 0.5,
+                  }}
+                >
+                  <IconButton
+                    onClick={() => handleMovePage(index, "left")}
+                    disabled={index === 0}
+                    sx={{
+                      color: index === 0 ? "#ccc" : "#2196f3",
+                      "&:hover": { color: index === 0 ? "#ccc" : "#1976d2" },
+                    }}
+                    aria-label={`move page ${page.pageNumber} left`}
+                  >
+                    <ArrowLeftIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    onClick={() => handleMovePage(index, "right")}
+                    disabled={index === rearrangePages.length - 1}
+                    sx={{
+                      color: index === rearrangePages.length - 1 ? "#ccc" : "#2196f3",
+                      "&:hover": { color: index === rearrangePages.length - 1 ? "#ccc" : "#1976d2" },
+                    }}
+                    aria-label={`move page ${page.pageNumber} right`}
+                  >
+                    <ArrowRightIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleRearrangePdf}
+            disabled={loading || rearrangePages.length === 0}
+            sx={{
+              mt: 3,
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #2196f3 0%, #42a5f5 100%)",
+              "&:hover": { background: "linear-gradient(90deg, #1976d2 0%, #2196f3 100%)" },
+            }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Save Rearranged PDF"}
           </Button>
         </SplitModalBox>
       </Modal>
